@@ -2,12 +2,14 @@
 
 **The agent on your own computer, signed in to Norriva.**
 
-Norriva is point-and-click: a dashboard, tables, a team. This is the other half
-— a command on your laptop that logs in to the same Norriva, is allowed into a
-folder you choose, and works with the shared data as you.
+A [Norriva Labs](https://norriva.lovable.app/how-it-works) experiment: what a
+point-and-click SaaS becomes when personal agents are let in. Norriva is a
+dashboard, tables, a team. This is the other half — a command on your laptop
+that logs in to the same Norriva, is allowed into a folder you choose, and
+works with the shared data as you.
 
 ```sh
-curl -fsSL https://norriva.example/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/magnusfroste/norrivaagent/main/install.sh | sh
 
 norriva login                     # opens the browser; you sign in to Norriva
 norriva link ./customer-project   # the folder the agent may work in

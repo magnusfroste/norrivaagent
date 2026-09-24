@@ -1,4 +1,4 @@
-# What the Norriva app must provide
+# What the Norriva Labs app must provide
 
 The agent is deliberately dumb about Norriva. Everything it knows arrives at
 login, from one page in the Norriva web app. This is that page, plus the one
@@ -82,15 +82,16 @@ proxy answers 500 to a signed-in caller and the agent says so.
   behind Lovable's own login and blocks the agent's plain HTTP calls — always
   use the published one).
 - Auth: email + password, auto-confirmed for the prototype.
-- Tables: `notes`, `customers` — RLS on, owner policies, comments, realtime.
+- Tables: `notes`, `customers`, `agent_activity` — RLS on, owner policies, comments, realtime.
+- Function: `norriva_schema()` — the table list, for signed-in callers.
 
 ## 3. Tables
 
 Nothing special. The agent reads and writes through PostgREST as the signed-in
 person, so whatever RLS policies the dashboard relies on apply to the agent
 too. Give the tables `comment on table` / `comment on column` descriptions —
-they show up in the OpenAPI description the agent reads with `norriva_tables`,
-and a model writes better rows when the table explains itself.
+they are what the agent shows the model in `norriva_tables`, and a model
+writes better rows when the table explains itself.
 
 For the demo, a table the dashboard shows live is the whole point:
 
@@ -109,3 +110,44 @@ comment on table public.notes is 'Notes a person keeps in Norriva. The agent on 
 ```
 
 Then: `norriva "read the meeting notes in this folder and add each as a note in Norriva"` — and watch the dashboard.
+
+## 4. `norriva_schema()` — the app describes itself
+
+PostgREST publishes an OpenAPI description at `/rest/v1/`, but Supabase reserves
+that root for secret keys: a person's session gets `401 Secret API key
+required`. So the agent asks Norriva instead. On 401/403 at the root it calls
+`POST /rest/v1/rpc/norriva_schema` and expects:
+
+```json
+[{"name":"notes","description":"Notes a person keeps…","columns":[{"name":"id","type":"uuid","description":null}, …]}]
+```
+
+The function is `security definer`, granted to `authenticated` only, and lists
+just the tables the caller has `SELECT` on — so it never reveals more than the
+person could already query. It lives in the migrations as of Lovable commit
+`302761d`. Column `description`s come from `comment on column`.
+
+## 5. `agent_activity` — the trail
+
+Every tool call the agent makes, from either family (files or Norriva), leaves
+one row here. It is what a team wants from an agent it cannot see: what it
+touched, from which machine, when. The agent writes it best-effort — a Norriva
+without the table simply has no log — and never logs contents, only names:
+
+```sql
+create table public.agent_activity (
+  id          uuid primary key default gen_random_uuid(),
+  owner       uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  agent       text not null default 'norriva',   -- which agent program
+  device      text,                              -- the laptop's hostname
+  tool        text not null,                     -- read_file, norriva_insert, …
+  summary     text,                              -- "customers ×2", "notes/2026-09.md"
+  created_at  timestamptz not null default now()
+);
+-- RLS: owners select and insert their own rows; nobody updates or deletes.
+```
+
+The agent inserts `{agent, device, tool, summary}` with `Prefer:
+return=minimal`; `owner` and `created_at` are defaults. The dashboard shows the
+signed-in person's rows live in the "Agent activity" panel.
+
