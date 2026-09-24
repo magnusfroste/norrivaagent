@@ -25,10 +25,13 @@ case "$os" in
 esac
 
 if [ "$VERSION" = "latest" ]; then
-  url="https://github.com/$REPO/releases/latest/download/norriva-$os-$arch"
-else
-  url="https://github.com/$REPO/releases/download/$VERSION/norriva-$os-$arch"
+  # GitHub's /releases/latest can lag or ignore a release; asking the API for
+  # the newest tag is one request and never wrong.
+  VERSION=$(curl -fsSL "https://api.github.com/repos/$REPO/releases?per_page=1" 2>/dev/null \
+    | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1)
+  [ -n "$VERSION" ] || { echo "norriva: could not find a release of $REPO" >&2; exit 1; }
 fi
+url="https://github.com/$REPO/releases/download/$VERSION/norriva-$os-$arch"
 # A local build server can stand in for GitHub during development.
 [ -n "${NORRIVA_DOWNLOAD_BASE:-}" ] && url="$NORRIVA_DOWNLOAD_BASE/norriva-$os-$arch"
 
