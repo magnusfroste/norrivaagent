@@ -16,6 +16,13 @@ norriva "read the notes in this folder and add each customer to Norriva"
 
 Then look at the dashboard. The rows are there.
 
+## What it is, next to Norriva's own agents
+
+Norriva already has agents inside the platform — a CFO agent, a CMO agent —
+like staff in the office. This one is different: a **remote-working agent**. It
+sits on your computer, with your files, and reports into the same shared
+system.
+
 ## Why it is built this way
 
 **The agent is you.** After `norriva login` the agent holds your Norriva
@@ -31,10 +38,11 @@ credential for both. Revoke the session and the agent is blind.
 any path that resolves outside it. Nothing on your disk is reachable by
 accident.
 
-**Bring your own agent.** `norriva mcp` serves the same tools over MCP, so
-opencode, Claude Code, Kilo or Hermes can reach your Norriva data as you. The
-built-in loop is there for a demo and for people who do not run an agent yet;
-the tools are the product.
+**The any-agent promise.** `norriva mcp` serves the same tools over MCP, so
+whatever agent you already run — opencode, Claude Code, Kilo, Hermes — can
+reach your Norriva data as you. Norriva does not ask you to install another
+agent; it lets yours in. The built-in loop is there for a demo and for people
+who do not run an agent yet; the tools are the product.
 
 ## Commands
 
