@@ -138,7 +138,7 @@ without the table simply has no log — and never logs contents, only names:
 create table public.agent_activity (
   id          uuid primary key default gen_random_uuid(),
   owner       uuid not null default auth.uid() references auth.users(id) on delete cascade,
-  agent       text not null default 'norriva',   -- which agent program
+  agent       text not null default 'norriva',   -- who acted: "norriva" for the built-in loop, the MCP client's own name (claude-code, opencode) otherwise
   device      text,                              -- the laptop's hostname
   tool        text not null,                     -- read_file, norriva_insert, …
   summary     text,                              -- "customers ×2", "notes/2026-09.md"

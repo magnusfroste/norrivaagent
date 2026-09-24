@@ -42,7 +42,8 @@ type rpcError struct {
 // Serve runs until stdin closes. Each line in is one JSON-RPC message; each
 // line out is one reply. Notifications (no id) get no reply.
 func Serve(cfg *config.Config, ws *config.Workspace, in io.Reader, out io.Writer, version string) error {
-	set := tools.Set(cfg, ws)
+	// Until the client introduces itself, the log names the transport.
+	set := tools.Set(cfg, ws, "mcp")
 	enc := json.NewEncoder(out)
 	sc := bufio.NewScanner(in)
 	sc.Buffer(make([]byte, 1<<20), 16<<20)
@@ -63,6 +64,16 @@ func Serve(cfg *config.Config, ws *config.Workspace, in io.Reader, out io.Writer
 		res := response{JSONRPC: "2.0", ID: req.ID}
 		switch req.Method {
 		case "initialize":
+			// The client says who it is ("claude-code", "opencode", …). That name
+			// goes on every activity line, so the team can see which agent acted.
+			var p struct {
+				ClientInfo struct {
+					Name string `json:"name"`
+				} `json:"clientInfo"`
+			}
+			if json.Unmarshal(req.Params, &p) == nil && p.ClientInfo.Name != "" {
+				set = tools.Set(cfg, ws, p.ClientInfo.Name)
+			}
 			res.Result = map[string]any{
 				"protocolVersion": protocolVersion,
 				"capabilities":    map[string]any{"tools": map[string]any{}},

@@ -35,8 +35,10 @@ type Tool struct {
 
 // Set builds the tools for one workspace and one signed-in session. ws may be
 // nil, in which case only the Norriva tools are offered — a session without a
-// folder can still read and write the shared data.
-func Set(cfg *config.Config, ws *config.Workspace) []Tool {
+// folder can still read and write the shared data. agent names who is calling
+// — "norriva" for the built-in loop, the client's own name over MCP — so the
+// activity log can say which agent did what, not just from which machine.
+func Set(cfg *config.Config, ws *config.Workspace, agent string) []Tool {
 	var out []Tool
 	if ws != nil {
 		out = append(out, fileTools(ws)...)
@@ -48,21 +50,24 @@ func Set(cfg *config.Config, ws *config.Workspace) []Tool {
 		// log. That is the traceability a team wants from an agent it cannot
 		// see: what it touched, from which machine, when.
 		device, _ := os.Hostname()
+		if agent == "" {
+			agent = "norriva"
+		}
 		for i := range out {
-			out[i] = traced(out[i], c, device)
+			out[i] = traced(out[i], c, agent, device)
 		}
 	}
 	return out
 }
 
-func traced(t Tool, c *norriva.Client, device string) Tool {
+func traced(t Tool, c *norriva.Client, agent, device string) Tool {
 	run := t.Run
 	t.Run = func(args map[string]any) (string, error) {
 		started := time.Now()
 		res, err := run(args)
 		summary := summarize(t.Name, args, res, err)
 		if time.Since(started) > 0 {
-			go c.Activity("norriva", device, t.Name, summary)
+			go c.Activity(agent, device, t.Name, summary)
 		}
 		return res, err
 	}

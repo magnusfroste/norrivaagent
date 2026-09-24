@@ -3,6 +3,8 @@ package mcp
 import (
 	"bytes"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -31,6 +33,45 @@ func talk(t *testing.T, ws *config.Workspace, lines ...string) []map[string]any 
 		replies = append(replies, m)
 	}
 	return replies
+}
+
+// Over MCP the caller is another agent, and the activity log must say which:
+// the name from the initialize handshake, not a generic "norriva".
+func TestActivityNamesTheCallingAgent(t *testing.T) {
+	var agents []string
+	done := make(chan struct{}, 4)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/rest/v1/":
+			w.Write([]byte(`{"definitions":{"agent_activity":{"properties":{"tool":{}}}}}`))
+		case "/rest/v1/agent_activity":
+			var rows []map[string]string
+			json.NewDecoder(r.Body).Decode(&rows)
+			for _, row := range rows {
+				agents = append(agents, row["agent"])
+			}
+			w.WriteHeader(201)
+			done <- struct{}{}
+		default:
+			w.Write([]byte(`[]`))
+		}
+	}))
+	defer srv.Close()
+	root := t.TempDir()
+	os.WriteFile(filepath.Join(root, "a.txt"), []byte("x"), 0o644)
+	cfg := &config.Config{SupabaseURL: srv.URL, AnonKey: "anon", AccessToken: "user-jwt"}
+	in := strings.NewReader(strings.Join([]string{
+		`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","clientInfo":{"name":"claude-code","version":"1"}}}`,
+		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"read_file","arguments":{"path":"a.txt"}}}`,
+	}, "\n") + "\n")
+	var out bytes.Buffer
+	if err := Serve(cfg, &config.Workspace{Name: "demo", Path: root}, in, &out, "test"); err != nil {
+		t.Fatal(err)
+	}
+	<-done
+	if len(agents) != 1 || agents[0] != "claude-code" {
+		t.Fatalf("the log should name the MCP client, got %v", agents)
+	}
 }
 
 func TestHandshakeAndToolList(t *testing.T) {

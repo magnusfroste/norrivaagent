@@ -53,7 +53,7 @@ type Agent struct {
 }
 
 func New(cfg *config.Config, ws *config.Workspace, out io.Writer) *Agent {
-	return &Agent{cfg: cfg, ws: ws, tools: tools.Set(cfg, ws), out: out, Trace: true}
+	return &Agent{cfg: cfg, ws: ws, tools: tools.Set(cfg, ws, "norriva"), out: out, Trace: true}
 }
 
 func (a *Agent) systemPrompt() string {

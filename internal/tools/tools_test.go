@@ -89,7 +89,7 @@ func TestNorrivaToolsCarryTheUsersOwnSession(t *testing.T) {
 	cfg, seen := fakeNorriva(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`[{"id":1}]`))
 	})
-	set := Set(cfg, nil)
+	set := Set(cfg, nil, "norriva")
 	if Find(set, "list_files") != nil {
 		t.Fatal("no folder linked, so no file tools should be offered")
 	}
@@ -109,7 +109,7 @@ func TestNorrivaToolsCarryTheUsersOwnSession(t *testing.T) {
 
 func TestUpdateWithoutAFilterIsRefusedBeforeItReachesTheWire(t *testing.T) {
 	cfg, seen := fakeNorriva(t, func(w http.ResponseWriter, r *http.Request) {})
-	_, err := Find(Set(cfg, nil), "norriva_update").Run(map[string]any{"table": "notes", "filter": "  ", "patch": map[string]any{"body": "x"}})
+	_, err := Find(Set(cfg, nil, "norriva"), "norriva_update").Run(map[string]any{"table": "notes", "filter": "  ", "patch": map[string]any{"body": "x"}})
 	if err == nil || !strings.Contains(err.Error(), "without a filter") {
 		t.Fatalf("an unfiltered update would rewrite the whole table; got %v", err)
 	}
@@ -129,7 +129,7 @@ func TestInsertReturnsWhatWasStored(t *testing.T) {
 		rows[0]["id"] = "generated"
 		json.NewEncoder(w).Encode(rows)
 	})
-	out, err := Find(Set(cfg, nil), "norriva_insert").Run(map[string]any{"table": "notes", "rows": []any{map[string]any{"title": "hi"}}})
+	out, err := Find(Set(cfg, nil, "norriva"), "norriva_insert").Run(map[string]any{"table": "notes", "rows": []any{map[string]any{"title": "hi"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,7 +147,7 @@ func TestErrorsFromNorrivaAreReadable(t *testing.T) {
 		w.WriteHeader(400)
 		w.Write([]byte(`{"message":"column \"nme\" does not exist","hint":"Perhaps you meant \"name\""}`))
 	})
-	_, err := Find(Set(cfg, nil), "norriva_query").Run(map[string]any{"table": "notes", "filter": "nme=eq.x"})
+	_, err := Find(Set(cfg, nil, "norriva"), "norriva_query").Run(map[string]any{"table": "notes", "filter": "nme=eq.x"})
 	if err == nil || !strings.Contains(err.Error(), "Perhaps you meant") {
 		t.Fatalf("the hint is the useful part and must survive: %v", err)
 	}
@@ -163,7 +163,7 @@ func TestRowsTheAgentWritesAreMarkedAsItsOwn(t *testing.T) {
 		json.NewDecoder(r.Body).Decode(&got)
 		w.Write([]byte(`[]`))
 	})
-	set := Set(cfg, nil)
+	set := Set(cfg, nil, "norriva")
 	Find(set, "norriva_insert").Run(map[string]any{"table": "notes", "rows": []any{map[string]any{"title": "a"}, map[string]any{"title": "b", "source": "import"}}})
 	if got[0]["source"] != "agent" {
 		t.Fatalf("a row without a source must be stamped agent, got %v", got[0]["source"])
@@ -197,7 +197,7 @@ func TestSchemaFallsBackToNorrivasOwnDescription(t *testing.T) {
 			w.Write([]byte(`[]`))
 		}
 	})
-	out, err := Find(Set(cfg, nil), "norriva_tables").Run(nil)
+	out, err := Find(Set(cfg, nil, "norriva"), "norriva_tables").Run(nil)
 	if err != nil || !strings.Contains(out, "notes (id, source) — Notes.") {
 		t.Fatalf("expected the RPC description, got %q, %v", out, err)
 	}
@@ -222,7 +222,7 @@ func TestEveryToolCallLeavesALineInTheActivityLog(t *testing.T) {
 	})
 	root := t.TempDir()
 	os.WriteFile(filepath.Join(root, "a.txt"), []byte("private contents"), 0o644)
-	set := Set(cfg, &config.Workspace{Name: "demo", Path: root})
+	set := Set(cfg, &config.Workspace{Name: "demo", Path: root}, "claude-code")
 	Find(set, "read_file").Run(map[string]any{"path": "a.txt"})
 	Find(set, "norriva_query").Run(map[string]any{"table": "notes", "filter": "id=eq.1"})
 	<-done
@@ -234,7 +234,7 @@ func TestEveryToolCallLeavesALineInTheActivityLog(t *testing.T) {
 		if strings.Contains(l["summary"], "private contents") {
 			t.Fatal("the log must name the file, never quote it")
 		}
-		if l["device"] == "" || l["agent"] != "norriva" {
+		if l["device"] == "" || l["agent"] != "claude-code" {
 			t.Fatalf("a log line says which agent on which machine: %v", l)
 		}
 	}
