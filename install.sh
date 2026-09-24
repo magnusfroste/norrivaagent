@@ -25,13 +25,20 @@ case "$os" in
 esac
 
 if [ "$VERSION" = "latest" ]; then
-  # GitHub's /releases/latest can lag or ignore a release; asking the API for
-  # the newest tag is one request and never wrong.
-  VERSION=$(curl -fsSL "https://api.github.com/repos/$REPO/releases?per_page=1" 2>/dev/null \
-    | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1)
-  [ -n "$VERSION" ] || { echo "norriva: could not find a release of $REPO" >&2; exit 1; }
+  # github.com/.../releases/latest/download/<asset> redirects to the newest
+  # release without touching the API, so it never hits the 60-an-hour limit an
+  # office full of laptops would. The API is only the fallback, for the rare
+  # moment right after a release when the redirect has not caught up.
+  url="https://github.com/$REPO/releases/latest/download/norriva-$os-$arch"
+  if ! curl -fsSLI -o /dev/null "$url" 2>/dev/null; then
+    VERSION=$(curl -fsSL "https://api.github.com/repos/$REPO/releases?per_page=1" 2>/dev/null \
+      | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1)
+    [ -n "$VERSION" ] || { echo "norriva: could not find a release of $REPO (is github.com reachable?)" >&2; exit 1; }
+    url="https://github.com/$REPO/releases/download/$VERSION/norriva-$os-$arch"
+  fi
+else
+  url="https://github.com/$REPO/releases/download/$VERSION/norriva-$os-$arch"
 fi
-url="https://github.com/$REPO/releases/download/$VERSION/norriva-$os-$arch"
 # A local build server can stand in for GitHub during development.
 [ -n "${NORRIVA_DOWNLOAD_BASE:-}" ] && url="$NORRIVA_DOWNLOAD_BASE/norriva-$os-$arch"
 
