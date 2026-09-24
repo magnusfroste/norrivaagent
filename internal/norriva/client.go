@@ -17,6 +17,7 @@ import (
 	"net/url"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/magnusfroste/norrivaagent/internal/config"
@@ -25,6 +26,7 @@ import (
 type Client struct {
 	cfg    *config.Config
 	http   *http.Client
+	mu     sync.Mutex       // guards schema: activity logging runs in goroutines
 	schema map[string]Table // fetched once per process
 }
 
@@ -74,6 +76,8 @@ func (c *Client) do(method, path string, body []byte, prefer string) ([]byte, er
 // that hides the root behind an admin-only route (some do) answers 403 here;
 // callers then work without it rather than failing.
 func (c *Client) Schema() (map[string]Table, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if c.schema != nil {
 		return c.schema, nil
 	}

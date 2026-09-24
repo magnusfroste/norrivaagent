@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/magnusfroste/norrivaagent/internal/config"
@@ -74,15 +75,27 @@ func TestWriteCreatesFoldersButOnlyInside(t *testing.T) {
 	}
 }
 
-// A Norriva stand-in: records what PostgREST would have received.
-func fakeNorriva(t *testing.T, handler http.HandlerFunc) (*config.Config, *[]*http.Request) {
-	var seen []*http.Request
+// A Norriva stand-in: records what PostgREST would have received. Requests
+// arrive from several goroutines (activity logging runs in its own), so the
+// record is read through a locked copy.
+func fakeNorriva(t *testing.T, handler http.HandlerFunc) (*config.Config, func() []*http.Request) {
+	var (
+		mu   sync.Mutex
+		seen []*http.Request
+	)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
 		seen = append(seen, r)
+		mu.Unlock()
 		handler(w, r)
 	}))
 	t.Cleanup(srv.Close)
-	return &config.Config{SupabaseURL: srv.URL, AnonKey: "anon", AccessToken: "user-jwt"}, &seen
+	requests := func() []*http.Request {
+		mu.Lock()
+		defer mu.Unlock()
+		return append([]*http.Request(nil), seen...)
+	}
+	return &config.Config{SupabaseURL: srv.URL, AnonKey: "anon", AccessToken: "user-jwt"}, requests
 }
 
 func TestNorrivaToolsCarryTheUsersOwnSession(t *testing.T) {
@@ -96,7 +109,7 @@ func TestNorrivaToolsCarryTheUsersOwnSession(t *testing.T) {
 	if _, err := Find(set, "norriva_query").Run(map[string]any{"table": "notes", "filter": "source=eq.agent"}); err != nil {
 		t.Fatal(err)
 	}
-	r := (*seen)[0]
+	r := seen()[0]
 	// The anon key identifies the project; the Bearer token is the person. Row
 	// level security only works if both are exactly this way round.
 	if r.Header.Get("apikey") != "anon" || r.Header.Get("Authorization") != "Bearer user-jwt" {
@@ -113,7 +126,7 @@ func TestUpdateWithoutAFilterIsRefusedBeforeItReachesTheWire(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "without a filter") {
 		t.Fatalf("an unfiltered update would rewrite the whole table; got %v", err)
 	}
-	if len(*seen) != 0 {
+	if len(seen()) != 0 {
 		t.Fatal("the request must not be sent at all")
 	}
 }
@@ -136,7 +149,7 @@ func TestInsertReturnsWhatWasStored(t *testing.T) {
 	if !strings.Contains(out, `"generated"`) {
 		t.Fatalf("the model needs the ids the database assigned: %s", out)
 	}
-	post := (*seen)[len(*seen)-1]
+	post := seen()[len(seen())-1]
 	if post.Method != http.MethodPost || post.Header.Get("Prefer") != "return=representation" {
 		t.Fatal("without Prefer: return=representation PostgREST answers with nothing")
 	}
@@ -204,7 +217,10 @@ func TestSchemaFallsBackToNorrivasOwnDescription(t *testing.T) {
 }
 
 func TestEveryToolCallLeavesALineInTheActivityLog(t *testing.T) {
-	var logged []map[string]string
+	var (
+		mu     sync.Mutex // the two log writes arrive concurrently
+		logged []map[string]string
+	)
 	done := make(chan struct{}, 8)
 	cfg, _ := fakeNorriva(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
@@ -213,7 +229,9 @@ func TestEveryToolCallLeavesALineInTheActivityLog(t *testing.T) {
 		case r.URL.Path == "/rest/v1/agent_activity":
 			var rows []map[string]string
 			json.NewDecoder(r.Body).Decode(&rows)
+			mu.Lock()
 			logged = append(logged, rows...)
+			mu.Unlock()
 			w.WriteHeader(201)
 			done <- struct{}{}
 		default:
@@ -227,6 +245,8 @@ func TestEveryToolCallLeavesALineInTheActivityLog(t *testing.T) {
 	Find(set, "norriva_query").Run(map[string]any{"table": "notes", "filter": "id=eq.1"})
 	<-done
 	<-done
+	mu.Lock()
+	defer mu.Unlock()
 	if len(logged) != 2 {
 		t.Fatalf("two calls, two log lines; got %d", len(logged))
 	}
