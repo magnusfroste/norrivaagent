@@ -54,40 +54,35 @@ Notes:
   settings — the browser is already signed in; this is a hand-over, not a
   redirect.
 
-## 2. The `llm` edge function (Norriva hands out inference)
+## 2. The `llm` proxy (Norriva hands out inference)
 
-The agent talks to an OpenAI-compatible `/chat/completions`. The simplest way
-for Norriva to hand out inference at login is a tiny proxy edge function that:
+The agent talks to an OpenAI-compatible `/chat/completions`. Norriva provides it
+as a **server route in the app itself** — `/api/public/llm/$` — rather than a
+Supabase edge function; on Lovable's stack that is the native place for server
+code. The behaviour is what matters, and it is:
 
-1. Verifies the `Authorization: Bearer <supabase access token>` header with
-   `supabase.auth.getUser()`. No user, no inference.
-2. Forwards the request body to OpenAI with Norriva's key.
-3. Streams or returns the response unchanged.
+1. No `Authorization: Bearer <session>` → 401.
+2. `supabase.auth.getUser(token)` fails → 401. The person, not the anon key, is
+   what is verified. This check comes **before** any look at the OpenAI key, so
+   a stranger with a bad token cannot learn whether the key is configured.
+3. Forward `/api/public/llm/<path>` to `https://api.openai.com/v1/<path>` with
+   `OPENAI_API_KEY` from the project's secrets; pass the response through
+   unchanged, streaming or not.
 
-```ts
-// supabase/functions/llm/index.ts
-Deno.serve(async (req) => {
-  const jwt = req.headers.get('authorization')?.replace('Bearer ', '')
-  const { data: { user } } = await supabase.auth.getUser(jwt)
-  if (!user) return new Response('sign in first', { status: 401 })
+The login page hands the agent `model.base_url = <origin>/api/public/llm` and
+`model.api_key = session.access_token`, so one credential — the person's session
+— covers both the data and the model, and revoking the session revokes both.
 
-  const url = new URL(req.url)                       // …/functions/v1/llm/chat/completions
-  const upstream = 'https://api.openai.com/v1' + url.pathname.replace(/^.*\/llm/, '')
-  return fetch(upstream, {
-    method: req.method,
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${Deno.env.get('OPENAI_API_KEY')}` },
-    body: req.body,
-  })
-})
-```
+`OPENAI_API_KEY` is set once, under Project Settings → Secrets. Until it is, the
+proxy answers 500 to a signed-in caller and the agent says so.
 
-With this in place, one credential — the person's session — covers both the
-data and the model, and revoking the session revokes both. Until it exists,
-the agent runs against a plain key:
+## Live
 
-```
-NORRIVA_MODEL_URL=https://api.openai.com/v1 NORRIVA_MODEL_KEY=sk-… norriva "…"
-```
+- App: https://norriva.lovable.app (published; the `id-preview--…` URL sits
+  behind Lovable's own login and blocks the agent's plain HTTP calls — always
+  use the published one).
+- Auth: email + password, auto-confirmed for the prototype.
+- Tables: `notes`, `customers` — RLS on, owner policies, comments, realtime.
 
 ## 3. Tables
 
