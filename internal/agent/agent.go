@@ -144,7 +144,10 @@ func (a *Agent) complete(ctx context.Context, msgs []Message) (*Message, error) 
 	if model == "" {
 		model = "gpt-5.6-luna"
 	}
-	body, _ := json.Marshal(map[string]any{"model": model, "messages": msgs, "tools": defs})
+	// Newer OpenAI models refuse function tools on /chat/completions unless
+	// reasoning is switched off explicitly ("use /v1/responses or set
+	// reasoning_effort to none"). The tools are the point here, so: none.
+	body, _ := json.Marshal(map[string]any{"model": model, "messages": msgs, "tools": defs, "reasoning_effort": "none"})
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(a.cfg.Model.BaseURL, "/")+"/chat/completions", bytes.NewReader(body))
 	if err != nil {

@@ -100,6 +100,10 @@ func TestUpdateWithoutAFilterIsRefusedBeforeItReachesTheWire(t *testing.T) {
 
 func TestInsertReturnsWhatWasStored(t *testing.T) {
 	cfg, seen := fakeNorriva(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet { // the schema lookup that precedes an insert
+			w.Write([]byte(`{"definitions":{}}`))
+			return
+		}
 		var rows []map[string]any
 		json.NewDecoder(r.Body).Decode(&rows)
 		rows[0]["id"] = "generated"
@@ -112,7 +116,8 @@ func TestInsertReturnsWhatWasStored(t *testing.T) {
 	if !strings.Contains(out, `"generated"`) {
 		t.Fatalf("the model needs the ids the database assigned: %s", out)
 	}
-	if (*seen)[0].Header.Get("Prefer") != "return=representation" {
+	post := (*seen)[len(*seen)-1]
+	if post.Method != http.MethodPost || post.Header.Get("Prefer") != "return=representation" {
 		t.Fatal("without Prefer: return=representation PostgREST answers with nothing")
 	}
 }
@@ -125,5 +130,92 @@ func TestErrorsFromNorrivaAreReadable(t *testing.T) {
 	_, err := Find(Set(cfg, nil), "norriva_query").Run(map[string]any{"table": "notes", "filter": "nme=eq.x"})
 	if err == nil || !strings.Contains(err.Error(), "Perhaps you meant") {
 		t.Fatalf("the hint is the useful part and must survive: %v", err)
+	}
+}
+
+func TestRowsTheAgentWritesAreMarkedAsItsOwn(t *testing.T) {
+	var got []map[string]any
+	cfg, _ := fakeNorriva(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/rest/v1/" {
+			w.Write([]byte(`{"definitions":{"notes":{"description":"Notes.","properties":{"id":{},"title":{},"source":{}}},"plain":{"properties":{"id":{}}}}}`))
+			return
+		}
+		json.NewDecoder(r.Body).Decode(&got)
+		w.Write([]byte(`[]`))
+	})
+	set := Set(cfg, nil)
+	Find(set, "norriva_insert").Run(map[string]any{"table": "notes", "rows": []any{map[string]any{"title": "a"}, map[string]any{"title": "b", "source": "import"}}})
+	if got[0]["source"] != "agent" {
+		t.Fatalf("a row without a source must be stamped agent, got %v", got[0]["source"])
+	}
+	if got[1]["source"] != "import" {
+		t.Fatal("a source the model set deliberately must be kept")
+	}
+	got = nil
+	Find(set, "norriva_insert").Run(map[string]any{"table": "plain", "rows": []any{map[string]any{"id": 1}}})
+	if _, has := got[0]["source"]; has {
+		t.Fatal("a table without a source column must be left alone")
+	}
+	// And the table list carries the comment, which is what tells a model what a table is for.
+	out, _ := Find(set, "norriva_tables").Run(nil)
+	if !strings.Contains(out, "notes (id, source, title) — Notes.") {
+		t.Fatalf("table list should show columns and comment: %q", out)
+	}
+}
+
+func TestSchemaFallsBackToNorrivasOwnDescription(t *testing.T) {
+	// Supabase reserves the OpenAPI root for secret keys; a person's session
+	// gets 401 there and must be answered by norriva_schema() instead.
+	cfg, _ := fakeNorriva(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/rest/v1/" && r.Method == http.MethodGet:
+			w.WriteHeader(401)
+			w.Write([]byte(`{"message":"Secret API key required"}`))
+		case r.URL.Path == "/rest/v1/rpc/norriva_schema":
+			w.Write([]byte(`[{"name":"notes","description":"Notes.","columns":[{"name":"id"},{"name":"source"}]}]`))
+		default:
+			w.Write([]byte(`[]`))
+		}
+	})
+	out, err := Find(Set(cfg, nil), "norriva_tables").Run(nil)
+	if err != nil || !strings.Contains(out, "notes (id, source) — Notes.") {
+		t.Fatalf("expected the RPC description, got %q, %v", out, err)
+	}
+}
+
+func TestEveryToolCallLeavesALineInTheActivityLog(t *testing.T) {
+	var logged []map[string]string
+	done := make(chan struct{}, 8)
+	cfg, _ := fakeNorriva(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/rest/v1/":
+			w.Write([]byte(`{"definitions":{"agent_activity":{"properties":{"tool":{},"summary":{}}},"notes":{"properties":{"id":{},"title":{}}}}}`))
+		case r.URL.Path == "/rest/v1/agent_activity":
+			var rows []map[string]string
+			json.NewDecoder(r.Body).Decode(&rows)
+			logged = append(logged, rows...)
+			w.WriteHeader(201)
+			done <- struct{}{}
+		default:
+			w.Write([]byte(`[{"id":1}]`))
+		}
+	})
+	root := t.TempDir()
+	os.WriteFile(filepath.Join(root, "a.txt"), []byte("private contents"), 0o644)
+	set := Set(cfg, &config.Workspace{Name: "demo", Path: root})
+	Find(set, "read_file").Run(map[string]any{"path": "a.txt"})
+	Find(set, "norriva_query").Run(map[string]any{"table": "notes", "filter": "id=eq.1"})
+	<-done
+	<-done
+	if len(logged) != 2 {
+		t.Fatalf("two calls, two log lines; got %d", len(logged))
+	}
+	for _, l := range logged {
+		if strings.Contains(l["summary"], "private contents") {
+			t.Fatal("the log must name the file, never quote it")
+		}
+		if l["device"] == "" || l["agent"] != "norriva" {
+			t.Fatalf("a log line says which agent on which machine: %v", l)
+		}
 	}
 }

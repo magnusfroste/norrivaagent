@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/magnusfroste/norrivaagent/internal/config"
 	"github.com/magnusfroste/norrivaagent/internal/norriva"
@@ -39,9 +40,57 @@ func Set(cfg *config.Config, ws *config.Workspace) []Tool {
 		out = append(out, fileTools(ws)...)
 	}
 	if cfg.LoggedIn() {
-		out = append(out, norrivaTools(norriva.New(cfg))...)
+		c := norriva.New(cfg)
+		out = append(out, norrivaTools(c)...)
+		// Every call, from either family, leaves a line in Norriva's activity
+		// log. That is the traceability a team wants from an agent it cannot
+		// see: what it touched, from which machine, when.
+		device, _ := os.Hostname()
+		for i := range out {
+			out[i] = traced(out[i], c, device)
+		}
 	}
 	return out
+}
+
+func traced(t Tool, c *norriva.Client, device string) Tool {
+	run := t.Run
+	t.Run = func(args map[string]any) (string, error) {
+		started := time.Now()
+		res, err := run(args)
+		summary := summarize(t.Name, args, res, err)
+		if time.Since(started) > 0 {
+			go c.Activity("norriva", device, t.Name, summary)
+		}
+		return res, err
+	}
+	return t
+}
+
+// summarize is what the log says. Names of things, never their contents.
+func summarize(tool string, args map[string]any, res string, err error) string {
+	var s string
+	switch tool {
+	case "list_files", "read_file", "write_file":
+		s = str(args["path"])
+		if s == "" {
+			s = "/"
+		}
+	case "norriva_tables":
+		s = "listed tables"
+	case "norriva_query", "norriva_insert", "norriva_update":
+		s = str(args["table"])
+		if rows, ok := args["rows"].([]any); ok {
+			s = fmt.Sprintf("%s ×%d", s, len(rows))
+		}
+		if f := str(args["filter"]); f != "" {
+			s += " where " + f
+		}
+	}
+	if err != nil {
+		s += " — failed: " + err.Error()
+	}
+	return s
 }
 
 // ---- files -----------------------------------------------------------------
@@ -148,14 +197,22 @@ func norrivaTools(c *norriva.Client) []Tool {
 			Description: "List the Norriva tables this account can see.",
 			Schema:      json.RawMessage(`{"type":"object","properties":{}}`),
 			Run: func(map[string]any) (string, error) {
-				names, err := c.Tables()
+				tables, err := c.Tables()
 				if err != nil {
 					return "", err
 				}
-				if len(names) == 0 {
+				if len(tables) == 0 {
 					return "(no tables visible to this account)", nil
 				}
-				return strings.Join(names, "\n"), nil
+				var b strings.Builder
+				for _, t := range tables {
+					fmt.Fprintf(&b, "%s (%s)", t.Name, strings.Join(t.Columns, ", "))
+					if t.Description != "" {
+						fmt.Fprintf(&b, " — %s", t.Description)
+					}
+					b.WriteString("\n")
+				}
+				return strings.TrimRight(b.String(), "\n"), nil
 			},
 		},
 		{
@@ -183,6 +240,7 @@ func norrivaTools(c *norriva.Client) []Tool {
 				if string(rows) == "null" || string(rows) == "[]" {
 					return "", errors.New("rows must be a non-empty JSON array")
 				}
+				rows = stampSource(c, str(args["table"]), rows)
 				out, err := c.Insert(str(args["table"]), rows)
 				if err != nil {
 					return "", err
@@ -207,6 +265,30 @@ func norrivaTools(c *norriva.Client) []Tool {
 			},
 		},
 	}
+}
+
+// stampSource marks rows the agent writes as its own. Norriva shows where a
+// row came from, and that must not depend on the model remembering to say so:
+// when the table has a source column and the row does not set it, it is
+// "agent". A table without the column is left alone.
+func stampSource(c *norriva.Client, table string, rows json.RawMessage) json.RawMessage {
+	if !c.HasColumn(table, "source") {
+		return rows
+	}
+	var list []map[string]any
+	if json.Unmarshal(rows, &list) != nil {
+		return rows
+	}
+	for _, r := range list {
+		if _, set := r["source"]; !set {
+			r["source"] = "agent"
+		}
+	}
+	out, err := json.Marshal(list)
+	if err != nil {
+		return rows
+	}
+	return out
 }
 
 // Find returns the tool with that name, or nil.
