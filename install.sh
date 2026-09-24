@@ -37,7 +37,7 @@ url="https://github.com/$REPO/releases/download/$VERSION/norriva-$os-$arch"
 
 tmp=$(mktemp)
 trap 'rm -f "$tmp"' EXIT
-echo "Downloading norriva for $os/$arch…"
+echo "Downloading norriva for $os/$arch..."
 if ! curl -fsSL "$url" -o "$tmp"; then
   echo "norriva: download failed: $url" >&2
   exit 1
