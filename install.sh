@@ -64,6 +64,6 @@ case ":$PATH:" in
 esac
 echo ""
 echo "Next:"
-echo "  norriva login --host https://your-norriva.app"
+echo "  norriva login"
 echo "  norriva link ./some-folder"
 echo "  norriva \"what is in this folder, and what is in Norriva?\""
