@@ -38,6 +38,26 @@ func TestFileToolsStayInsideTheLinkedFolder(t *testing.T) {
 	}
 }
 
+// The demo says "put your files in the folder". Text is what the model can use;
+// a Word file or PDF must be refused with a sentence that says what to do.
+func TestBinaryFilesAreRefusedWithAdvice(t *testing.T) {
+	root := t.TempDir()
+	os.WriteFile(filepath.Join(root, "anteckningar.md"), []byte("# Möte 24/9\nÅsa, Örjan, é"), 0o644)
+	os.WriteFile(filepath.Join(root, "offert.docx"), append([]byte("PK\x03\x04"), make([]byte, 64)...), 0o644)
+	os.WriteFile(filepath.Join(root, "bild.png"), []byte("\x89PNG\r\n\x1a\n\xff\xfe\x80"), 0o644)
+	read := Find(fileTools(&config.Workspace{Name: "demo", Path: root}), "read_file")
+
+	if out, err := read.Run(map[string]any{"path": "anteckningar.md"}); err != nil || !strings.Contains(out, "Örjan") {
+		t.Fatalf("UTF-8 text must read as is: %q %v", out, err)
+	}
+	for _, f := range []string{"offert.docx", "bild.png"} {
+		_, err := read.Run(map[string]any{"path": f})
+		if err == nil || !strings.Contains(err.Error(), "export it as text") {
+			t.Errorf("%s should be refused with advice, got %v", f, err)
+		}
+	}
+}
+
 func TestWriteCreatesFoldersButOnlyInside(t *testing.T) {
 	root := t.TempDir()
 	set := fileTools(&config.Workspace{Name: "demo", Path: root})

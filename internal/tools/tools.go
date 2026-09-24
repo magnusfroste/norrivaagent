@@ -9,6 +9,7 @@
 package tools
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,6 +18,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/magnusfroste/norrivaagent/internal/config"
 	"github.com/magnusfroste/norrivaagent/internal/norriva"
@@ -149,7 +151,7 @@ func fileTools(ws *config.Workspace) []Tool {
 		},
 		{
 			Name:        "read_file",
-			Description: "Read a text file inside the linked folder. Large files are truncated at 200 kB.",
+			Description: "Read a text file inside the linked folder — .md, .txt, .csv, .json and the like. Binary formats (.pdf, .docx, .xlsx, images) are refused. Large files are truncated at 200 kB.",
 			Schema:      json.RawMessage(`{"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}`),
 			Run: func(args map[string]any) (string, error) {
 				abs, err := inside(ws, str(args["path"]))
@@ -159,6 +161,9 @@ func fileTools(ws *config.Workspace) []Tool {
 				b, err := os.ReadFile(abs)
 				if err != nil {
 					return "", err
+				}
+				if isBinary(b) {
+					return "", fmt.Errorf("%s is not a text file; the agent reads .md, .txt, .csv, .json and similar — export it as text first", str(args["path"]))
 				}
 				if len(b) > maxRead {
 					return string(b[:maxRead]) + "\n…(truncated)", nil
@@ -186,6 +191,19 @@ func fileTools(ws *config.Workspace) []Tool {
 			},
 		},
 	}
+}
+
+// isBinary is the cheap test editors use: a NUL byte in the first 8 kB, or
+// bytes that are not UTF-8. A .docx or .pdf fed to a model as a string is
+// noise at best, and the honest answer is "export it as text".
+func isBinary(b []byte) bool {
+	if len(b) > 8192 {
+		b = b[:8192]
+	}
+	if bytes.IndexByte(b, 0) >= 0 {
+		return true
+	}
+	return !utf8.Valid(b) && !utf8.Valid(b[:len(b)-utf8.UTFMax])
 }
 
 // ---- norriva ---------------------------------------------------------------
