@@ -30,8 +30,8 @@ await fetch(`http://127.0.0.1:${port}/callback`, {
     refresh_token: session.refresh_token,
     supabase_url:  import.meta.env.VITE_SUPABASE_URL,
     anon_key:      import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-    model: {                                 // optional — see §2
-      base_url: `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/llm`,
+    model: {                                 // how the agent reaches inference
+      base_url: `${window.location.origin}/api/public/llm`,   // see §2
       api_key:  session.access_token,
       name:     'gpt-5.6-luna'
     }
