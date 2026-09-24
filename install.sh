@@ -5,7 +5,7 @@
 #
 # One binary, no runtime. It goes to /usr/local/bin when that is writable,
 # otherwise to ~/.local/bin, and the script says which and whether that is on
-# your PATH — the two things an install script most often leaves you to find
+# your PATH - the two things an install script most often leaves you to find
 # out for yourself.
 set -eu
 
@@ -53,7 +53,7 @@ fi
 mv "$tmp" "$dest"
 trap - EXIT
 
-echo "Installed $("$dest" version) → $dest"
+echo "Installed $("$dest" version) -> $dest"
 case ":$PATH:" in
   *":$(dirname "$dest"):"*) ;;
   *)
