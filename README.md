@@ -46,6 +46,11 @@ reach your Norriva data as you. Norriva does not ask you to install another
 agent; it lets yours in. The built-in loop is there for a demo and for people
 who do not run an agent yet; the tools are the product.
 
+**Why a terminal?** Because it is the simplest thing that proves the idea.
+Nothing here depends on it: the same agent could ship as a desktop app with a
+window — pick a folder, type what you want, watch the activity list — or live
+inside an agent you already run. The terminal is the demo, not the design.
+
 ## Commands
 
 | | |
