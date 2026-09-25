@@ -78,8 +78,14 @@ func Serve(cfg *config.Config, ws *config.Workspace, in io.Reader, out io.Writer
 				"protocolVersion": protocolVersion,
 				"capabilities":    map[string]any{"tools": map[string]any{}},
 				"serverInfo":      map[string]any{"name": "norriva", "version": version},
-				"instructions": "Tools for the user's Norriva account and their linked folder. " +
-					"Look at a table with norriva_query before inserting into it so rows match its shape.",
+				"instructions": "Tools for the user's Norriva account and their linked folder. Norriva's tables are " +
+					"the shared truth; files in the folder are inflow. Start with norriva_tables: the table and " +
+					"column comments say what each is for. Put what a file contains into every table that fits — " +
+					"a result report fills the actual column of budget_lines (match item and month; update, never " +
+					"duplicate; a null actual is a gap to fill), a meeting note becomes a note, its companies or " +
+					"people customers, its deal an opportunity at the implied stage. Look at existing rows before " +
+					"writing, and read back after writing to check nothing is missing. The source column is set " +
+					"to \"agent\" for you; every call is logged for the person's team.",
 			}
 		case "ping":
 			res.Result = map[string]any{}
