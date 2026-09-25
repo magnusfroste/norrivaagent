@@ -1,6 +1,6 @@
 # norriva
 
-**The agent on your own computer, signed in to Norriva.**
+**Norriva Desk — the personal agent on your own computer, signed in to Norriva.**
 
 A [Norriva Labs](https://norriva.lovable.app/how-it-works) experiment: what a
 point-and-click SaaS becomes when personal agents are let in. Norriva is a
@@ -20,10 +20,10 @@ Then look at the dashboard. The rows are there.
 
 ## What it is, next to Norriva's own agents
 
-Norriva already has agents inside the platform — a CFO agent, a CMO agent —
-like staff in the office. This one is different: a **remote-working agent**. It
-sits on your computer, with your files, and reports into the same shared
-system.
+Norriva already has agents inside the platform — the advisors: a CFO, a CMO —
+like staff in the office. Norriva Desk is different: a **personal agent**. It
+sits on your computer, with your files, works for you, and reports into the
+same shared system.
 
 ## Why it is built this way
 

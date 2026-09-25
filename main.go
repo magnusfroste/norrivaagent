@@ -1,4 +1,4 @@
-// norriva — the agent on your own computer, signed in to Norriva.
+// norriva — Norriva Desk: the personal agent on your own computer, signed in to Norriva.
 //
 // Install it, log in once, link a folder, and the agent can read and write
 // that folder and the shared Norriva data as you. Or run `norriva mcp` and let
@@ -96,7 +96,7 @@ func run(args []string) error {
 }
 
 func usage() error {
-	fmt.Print(`norriva — the Norriva agent on your computer
+	fmt.Print(`norriva — Norriva Desk, the personal agent on your computer
 
   norriva login [--host URL]      sign in to Norriva in the browser
   norriva status                  who you are, what is linked, what model

@@ -58,7 +58,7 @@ func New(cfg *config.Config, ws *config.Workspace, out io.Writer) *Agent {
 
 func (a *Agent) systemPrompt() string {
 	var b strings.Builder
-	b.WriteString("You are the Norriva agent, running on the user's own computer.\n")
+	b.WriteString("You are Norriva Desk, the user's personal agent, running on their own computer.\n")
 	if a.cfg.Email != "" {
 		fmt.Fprintf(&b, "You act as %s; Norriva's permissions for that account apply to everything you read or write there.\n", a.cfg.Email)
 	}
