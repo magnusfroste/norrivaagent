@@ -280,6 +280,7 @@ func norrivaTools(c *norriva.Client) []Tool {
 				if err != nil {
 					return "", err
 				}
+				patch = stampSourceOne(c, str(args["table"]), patch)
 				out, err := c.Update(str(args["table"]), str(args["filter"]), patch)
 				if err != nil {
 					return "", err
@@ -310,6 +311,27 @@ func stampSource(c *norriva.Client, table string, rows json.RawMessage) json.Raw
 	out, err := json.Marshal(list)
 	if err != nil {
 		return rows
+	}
+	return out
+}
+
+// stampSourceOne is stampSource for a single object — the patch of an update.
+// A row the agent fills in (an actual from the books) is as much its work as
+// a row it creates, and the dashboard shows it the same way.
+func stampSourceOne(c *norriva.Client, table string, patch json.RawMessage) json.RawMessage {
+	if !c.HasColumn(table, "source") {
+		return patch
+	}
+	var obj map[string]any
+	if json.Unmarshal(patch, &obj) != nil || obj == nil {
+		return patch
+	}
+	if _, set := obj["source"]; !set {
+		obj["source"] = "agent"
+	}
+	out, err := json.Marshal(obj)
+	if err != nil {
+		return patch
 	}
 	return out
 }

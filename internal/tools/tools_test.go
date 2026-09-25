@@ -200,6 +200,32 @@ func TestRowsTheAgentWritesAreMarkedAsItsOwn(t *testing.T) {
 	}
 }
 
+// Filling in a row is the agent's work too: an update to a table with a source
+// column is stamped agent, so the dashboard shows who wrote the actuals.
+func TestUpdatesAreMarkedAsTheAgentsToo(t *testing.T) {
+	var got map[string]any
+	cfg, _ := fakeNorriva(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/rest/v1/" {
+			w.Write([]byte(`{"definitions":{"budget_lines":{"properties":{"id":{},"actual":{},"source":{}}},"plain":{"properties":{"id":{},"x":{}}}}}`))
+			return
+		}
+		if r.Method == http.MethodPatch {
+			json.NewDecoder(r.Body).Decode(&got)
+		}
+		w.Write([]byte(`[]`))
+	})
+	set := Set(cfg, nil, "norriva")
+	Find(set, "norriva_update").Run(map[string]any{"table": "budget_lines", "filter": "id=eq.1", "patch": map[string]any{"actual": 42}})
+	if got["source"] != "agent" || got["actual"] != float64(42) {
+		t.Fatalf("an update to a sourced table must carry source=agent alongside the patch, got %v", got)
+	}
+	got = nil
+	Find(set, "norriva_update").Run(map[string]any{"table": "plain", "filter": "id=eq.1", "patch": map[string]any{"x": 1}})
+	if _, has := got["source"]; has {
+		t.Fatal("a table without a source column must be left alone")
+	}
+}
+
 func TestSchemaFallsBackToNorrivasOwnDescription(t *testing.T) {
 	// Supabase reserves the OpenAPI root for secret keys; a person's session
 	// gets 401 there and must be answered by norriva_schema() instead.
