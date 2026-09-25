@@ -40,6 +40,13 @@ credential for both. Revoke the session and the agent is blind.
 any path that resolves outside it. Nothing on your disk is reachable by
 accident.
 
+**The folder is a drop box.** `norriva watch` polls the linked folder; a file
+that arrives and holds still for a couple of seconds is handed to the agent
+with an instruction (by default: read it, add customers and notes, no
+duplicates). Nothing to type, no browser, no schedule — the person drops a
+meeting note in a folder and the rows are in Norriva before they have opened
+the dashboard.
+
 **The any-agent promise.** `norriva mcp` serves the same tools over MCP, so
 whatever agent you already run — opencode, Claude Code, Kilo, Hermes — can
 reach your Norriva data as you. Norriva does not ask you to install another
@@ -60,6 +67,7 @@ inside an agent you already run. The terminal is the demo, not the design.
 | `norriva link <path> [--name N]` | let the agent work in a folder |
 | `norriva "<instruction>"` | do one thing and report |
 | `norriva chat` | a conversation |
+| `norriva watch ["<instruction>"]` | the folder becomes a drop box: every file that lands in it is handed to the agent |
 | `norriva mcp` | the tools over MCP, for another agent |
 | `norriva logout` | forget the session; keep the folders |
 

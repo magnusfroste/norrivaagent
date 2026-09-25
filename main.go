@@ -14,11 +14,13 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/magnusfroste/norrivaagent/internal/agent"
 	"github.com/magnusfroste/norrivaagent/internal/auth"
 	"github.com/magnusfroste/norrivaagent/internal/config"
 	"github.com/magnusfroste/norrivaagent/internal/mcp"
+	"github.com/magnusfroste/norrivaagent/internal/watch"
 )
 
 // Set at build time: -ldflags "-X main.version=…"
@@ -85,6 +87,8 @@ func run(args []string) error {
 		return cmdChat(cfg, rest)
 	case "run":
 		return cmdRun(cfg, rest)
+	case "watch":
+		return cmdWatch(cfg, rest)
 	default:
 		// `norriva "do this"` — the instruction is the whole command line.
 		return cmdRun(cfg, args)
@@ -100,6 +104,7 @@ func usage() error {
   norriva unlink <name>           forget a folder
   norriva "<instruction>"         do one thing and report
   norriva chat                    a conversation, until you type exit
+  norriva watch ["<instruction>"] drop a file in the folder; the agent acts on it
   norriva mcp [--workspace N]     serve the same tools over MCP (stdio)
   norriva logout
 
@@ -292,6 +297,50 @@ func cmdRun(cfg *config.Config, args []string) error {
 	defer stop()
 	_, err = agent.New(cfg, ws, os.Stdout).Run(ctx, prompt, nil)
 	return err
+}
+
+// The drop box. Every file that lands in the linked folder is handed to the
+// agent with this instruction, {file} replaced by the file's path. The
+// default is deliberately general — the folder decides what the files are.
+const defaultWatchPrompt = "A new file was just added to the linked folder: {file}. Read it and add what it contains " +
+	"to Norriva — people or companies as customers, meetings or decisions as notes. Look at what already " +
+	"exists first and do not create duplicates. Then say in one line what you did."
+
+func cmdWatch(cfg *config.Config, args []string) error {
+	fs := flag.NewFlagSet("watch", flag.ContinueOnError)
+	wsName := workspaceFlag(fs)
+	every := fs.Duration("every", 2*time.Second, "how often to look")
+	if err := fs.Parse(flagsFirst(args)); err != nil {
+		return err
+	}
+	instruction := strings.TrimSpace(strings.Join(fs.Args(), " "))
+	if instruction == "" {
+		instruction = defaultWatchPrompt
+	}
+	ws, err := pickWorkspace(cfg, *wsName)
+	if err != nil {
+		return err
+	}
+	if ws == nil {
+		return fmt.Errorf("nothing to watch — link a folder first: norriva link <path>")
+	}
+	if !cfg.LoggedIn() {
+		return fmt.Errorf("not signed in — run `norriva login` first")
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+	fmt.Printf("Watching %s (%s). Drop a file in; Ctrl-C to stop.\n", ws.Name, ws.Path)
+	return watch.Run(ctx, ws.Path, *every, func(rel string) {
+		fmt.Printf("\n▸ new file: %s\n", rel)
+		if err := auth.EnsureFresh(cfg); err != nil {
+			fmt.Fprintln(os.Stderr, "norriva:", err)
+			return
+		}
+		prompt := strings.ReplaceAll(instruction, "{file}", rel)
+		if _, err := agent.New(cfg, ws, os.Stdout).Run(ctx, prompt, nil); err != nil {
+			fmt.Fprintln(os.Stderr, "norriva:", err)
+		}
+	})
 }
 
 func cmdChat(cfg *config.Config, args []string) error {
