@@ -185,8 +185,8 @@ func TestRowsTheAgentWritesAreMarkedAsItsOwn(t *testing.T) {
 	if got[0]["source"] != "agent" {
 		t.Fatalf("a row without a source must be stamped agent, got %v", got[0]["source"])
 	}
-	if got[1]["source"] != "import" {
-		t.Fatal("a source the model set deliberately must be kept")
+	if got[1]["source"] != "agent" {
+		t.Fatalf("whatever the model put in source, the row is the agent's work; got %v", got[1]["source"])
 	}
 	got = nil
 	Find(set, "norriva_insert").Run(map[string]any{"table": "plain", "rows": []any{map[string]any{"id": 1}}})
@@ -201,7 +201,8 @@ func TestRowsTheAgentWritesAreMarkedAsItsOwn(t *testing.T) {
 }
 
 // Filling in a row is the agent's work too: an update to a table with a source
-// column is stamped agent, so the dashboard shows who wrote the actuals.
+// column is stamped agent, so the dashboard shows who wrote the actuals — and
+// a model that writes the file name into source (it happened) is overruled.
 func TestUpdatesAreMarkedAsTheAgentsToo(t *testing.T) {
 	var got map[string]any
 	cfg, _ := fakeNorriva(t, func(w http.ResponseWriter, r *http.Request) {
@@ -215,7 +216,7 @@ func TestUpdatesAreMarkedAsTheAgentsToo(t *testing.T) {
 		w.Write([]byte(`[]`))
 	})
 	set := Set(cfg, nil, "norriva")
-	Find(set, "norriva_update").Run(map[string]any{"table": "budget_lines", "filter": "id=eq.1", "patch": map[string]any{"actual": 42}})
+	Find(set, "norriva_update").Run(map[string]any{"table": "budget_lines", "filter": "id=eq.1", "patch": map[string]any{"actual": 42, "source": "report.csv"}})
 	if got["source"] != "agent" || got["actual"] != float64(42) {
 		t.Fatalf("an update to a sourced table must carry source=agent alongside the patch, got %v", got)
 	}

@@ -292,9 +292,11 @@ func norrivaTools(c *norriva.Client) []Tool {
 }
 
 // stampSource marks rows the agent writes as its own. Norriva shows where a
-// row came from, and that must not depend on the model remembering to say so:
-// when the table has a source column and the row does not set it, it is
-// "agent". A table without the column is left alone.
+// row came from, and that must not depend on the model: when the table has a
+// source column, every row the agent writes says "agent" — even if the model
+// put something else there (the first live run wrote the file name, which is
+// the activity log's job, not the row's). A table without the column is left
+// alone.
 func stampSource(c *norriva.Client, table string, rows json.RawMessage) json.RawMessage {
 	if !c.HasColumn(table, "source") {
 		return rows
@@ -304,9 +306,7 @@ func stampSource(c *norriva.Client, table string, rows json.RawMessage) json.Raw
 		return rows
 	}
 	for _, r := range list {
-		if _, set := r["source"]; !set {
-			r["source"] = "agent"
-		}
+		r["source"] = "agent"
 	}
 	out, err := json.Marshal(list)
 	if err != nil {
@@ -317,7 +317,8 @@ func stampSource(c *norriva.Client, table string, rows json.RawMessage) json.Raw
 
 // stampSourceOne is stampSource for a single object — the patch of an update.
 // A row the agent fills in (an actual from the books) is as much its work as
-// a row it creates, and the dashboard shows it the same way.
+// a row it creates, and the dashboard shows it the same way. It only touches
+// source when the patch already mentions it or the table has the column.
 func stampSourceOne(c *norriva.Client, table string, patch json.RawMessage) json.RawMessage {
 	if !c.HasColumn(table, "source") {
 		return patch
@@ -326,9 +327,7 @@ func stampSourceOne(c *norriva.Client, table string, patch json.RawMessage) json
 	if json.Unmarshal(patch, &obj) != nil || obj == nil {
 		return patch
 	}
-	if _, set := obj["source"]; !set {
-		obj["source"] = "agent"
-	}
+	obj["source"] = "agent"
 	out, err := json.Marshal(obj)
 	if err != nil {
 		return patch
