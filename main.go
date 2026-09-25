@@ -302,9 +302,11 @@ func cmdRun(cfg *config.Config, args []string) error {
 // The drop box. Every file that lands in the linked folder is handed to the
 // agent with this instruction, {file} replaced by the file's path. The
 // default is deliberately general — the folder decides what the files are.
-const defaultWatchPrompt = "A new file was just added to the linked folder: {file}. Read it and add what it contains " +
-	"to Norriva — people or companies as customers, meetings or decisions as notes. Look at what already " +
-	"exists first and do not create duplicates. Then say in one line what you did."
+const defaultWatchPrompt = "A new file was just added to the linked folder: {file}. Read it and put what it contains " +
+	"into Norriva, in the table that fits: a bookkeeping export or result report fills the actual column of " +
+	"budget_lines (match item name and month; update existing rows, never insert duplicates); a meeting note " +
+	"becomes a note, the people or companies in it customers, and a deal in it an opportunity at the stage the " +
+	"note implies. Look at the tables and existing rows first. Then say in one line what you did."
 
 func cmdWatch(cfg *config.Config, args []string) error {
 	fs := flag.NewFlagSet("watch", flag.ContinueOnError)
