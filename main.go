@@ -305,7 +305,9 @@ func cmdRun(cfg *config.Config, args []string) error {
 const defaultWatchPrompt = "A new file was just added to the linked folder: {file}. Work on that file only — the others in " +
 	"the folder were handled when they arrived. Read it and put what it contains into Norriva, in every table " +
 	"that fits: a bookkeeping export or result report fills the actual column of budget_lines (match item " +
-	"name and month; update existing rows, never insert duplicates). A meeting note becomes all of these: a " +
+	"name and month; update existing rows, never insert duplicates; a row whose actual is null is a gap to " +
+	"fill, not a match to skip — after writing, list the rows still null for the months the file covers and " +
+	"fill them). A meeting note becomes all of these: a " +
 	"note (title and the gist), a customer for each company or person in it that is not already there, and an " +
 	"opportunity for any deal it mentions, at the stage the note implies, with value and expected close if " +
 	"given. Look at the tables and the existing rows first. Then say in one line what you did."
