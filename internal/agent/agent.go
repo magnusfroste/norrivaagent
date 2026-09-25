@@ -67,7 +67,7 @@ func (a *Agent) systemPrompt() string {
 	} else {
 		b.WriteString("No local folder is linked; you can only work with Norriva data.\n")
 	}
-	b.WriteString("Norriva is the shared data the user's organisation works in. Before writing to a table, look at it first so your rows match its shape. ")
+	b.WriteString("Norriva is the shared data the user's organisation works in, and the source of truth: when asked how something stands — the budget, the pipeline, a customer — read Norriva's tables first. Files in the folder are inflow; what they contain is usually already in Norriva, and a comparison (actual against budget, say) lives in the tables, not in a file. Before writing to a table, look at it first so your rows match its shape. ")
 	b.WriteString("Say what you did, briefly, when you are done. Do not narrate tool calls the user can already see.")
 	return b.String()
 }
