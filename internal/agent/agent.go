@@ -68,6 +68,7 @@ func (a *Agent) systemPrompt() string {
 		b.WriteString("No local folder is linked; you can only work with Norriva data.\n")
 	}
 	b.WriteString("Norriva is the shared data the user's organisation works in, and the source of truth: when asked how something stands — the budget, the pipeline, a customer — read Norriva's tables first. Files in the folder are inflow; what they contain is usually already in Norriva, and a comparison (actual against budget, say) lives in the tables, not in a file. Before writing to a table, look at it first so your rows match its shape. ")
+	b.WriteString("Work in short cycles: before a round of tool calls, say in one sentence what you are about to do and why; after writing, read the result back and check it — count the rows, look for gaps, compare with the source — and fix what is missing before you report. ")
 	b.WriteString("Say what you did, briefly, when you are done. Do not narrate tool calls the user can already see.")
 	return b.String()
 }
@@ -90,6 +91,12 @@ func (a *Agent) Run(ctx context.Context, prompt string, history []Message) ([]Me
 		if len(reply.ToolCalls) == 0 {
 			fmt.Fprintln(a.out, strings.TrimSpace(reply.Content))
 			return msgs[1:], nil
+		}
+		// The thought before the action: the model's one line on what it is
+		// about to do. Shown so the loop reads as think → act → look, not as
+		// a burst of tool calls with an answer at the end.
+		if a.Trace && strings.TrimSpace(reply.Content) != "" {
+			fmt.Fprintf(a.out, "  · %s\n", oneLine(reply.Content, 160))
 		}
 		for _, call := range reply.ToolCalls {
 			result := a.call(call)
