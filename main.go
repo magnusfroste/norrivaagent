@@ -327,6 +327,10 @@ func cmdWatch(cfg *config.Config, args []string) error {
 	if !cfg.LoggedIn() {
 		return fmt.Errorf("not signed in — run `norriva login` first")
 	}
+	// Fail now, not when the first file lands hours later with nobody watching.
+	if err := auth.EnsureFresh(cfg); err != nil {
+		return err
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 	fmt.Printf("Watching %s (%s). Drop a file in; Ctrl-C to stop.\n", ws.Name, ws.Path)
